@@ -5,34 +5,39 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.CacheConfig
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.cache.caffeine.CaffeineCacheManager
 import org.springframework.context.annotation.Bean
-import java.util.concurrent.TimeUnit
-import javax.persistence.Entity
-import javax.persistence.GeneratedValue
-import javax.persistence.GenerationType
-import javax.persistence.Id
+import org.springframework.context.annotation.Configuration
 import org.springframework.data.repository.CrudRepository
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RestController
+import java.util.*
+import java.util.concurrent.TimeUnit
+import javax.persistence.Entity
+import javax.persistence.Id
 
 
 @EnableCaching
 @SpringBootApplication
-class DemoCacheNonReactiveApplication{
+class DemoCacheNonReactiveApplication
+
+@Configuration
+class AppConfig {
+
     @Bean
     fun cacheManager(): CacheManager {
-        return CaffeineCacheManager("Customer")
+        return CaffeineCacheManager("Student")
             .apply {
                 isAllowNullValues = false
                 setCaffeine(
                     Caffeine.newBuilder()
-                    .maximumSize(100)
-                    .expireAfterAccess(1, TimeUnit.HOURS)
+                        .maximumSize(100)
+                        .expireAfterAccess(1, TimeUnit.HOURS)
                 )
             }
     }
@@ -42,28 +47,38 @@ fun main(args: Array<String>) {
     runApplication<DemoCacheNonReactiveApplication>(*args)
 }
 
-
 @Entity
-data class Customer(
+data class Student(
+
     @Id
-    @GeneratedValue(strategy= GenerationType.AUTO)
     val id: Long?,
     val name: String
 )
 
-interface CustomerRepository : CrudRepository<Customer, Long>
+interface StudentRepository : CrudRepository<Student, Long>
 
 @Service
-@CacheConfig(cacheNames = ["Customer"])
-class CustomerService(val customerRepository: CustomerRepository){
-    @Cacheable
-    fun findCustomerById(id: Long) = customerRepository.findById(id)
+@CacheConfig(cacheNames = ["Student"])
+class StudentService(val studentRepository: StudentRepository, val cacheManager: CacheManager) {
+
+    @Cacheable(value = ["Student"], key = "#id")
+    fun findStudentById(id: Long) = studentRepository.findById(id)
+
+    @CacheEvict(value = ["Student"], key = "#id")
+    fun updateStudent(id: Long, student: Student) {
+        val existingStudent = this.findStudentById(id).get().copy(name = student.name)
+        studentRepository.save(existingStudent)
+    }
 }
 
 
-
 @RestController
-class DemoController(val customerService: CustomerService){
+class StudentController(val studentService: StudentService) {
+
     @GetMapping("/{id}")
-    fun demoM(@PathVariable id: Long) = customerService.findCustomerById(id)
+    fun getStudent(@PathVariable id: Long) = studentService.findStudentById(id)
+
+    @GetMapping("/update/{id}")
+    fun updateStudent(@PathVariable id: Long) =
+        studentService.updateStudent(id, Student(id, "Name ${UUID.randomUUID()}"))
 }
