@@ -59,12 +59,12 @@ interface StudentRepository : CrudRepository<Student, Long>
 
 @Service
 @CacheConfig(cacheNames = ["Student"])
-class StudentService(val studentRepository: StudentRepository, val cacheManager: CacheManager) {
+class StudentService(val studentRepository: StudentRepository) {
 
-    @Cacheable(value = ["Student"], key = "#id")
+    @Cacheable(key = "#id")
     fun findStudentById(id: Long) = studentRepository.findById(id)
 
-    @CacheEvict(value = ["Student"], key = "#id")
+    @CacheEvict(key = "#id")
     fun updateStudent(id: Long, student: Student) {
         val existingStudent = this.findStudentById(id).get().copy(name = student.name)
         studentRepository.save(existingStudent)
@@ -73,7 +73,7 @@ class StudentService(val studentRepository: StudentRepository, val cacheManager:
 
 
 @RestController
-class StudentController(val studentService: StudentService) {
+class StudentController(val studentService: StudentService, val cacheManager: CacheManager) {
 
     @GetMapping("/{id}")
     fun getStudent(@PathVariable id: Long) = studentService.findStudentById(id)
@@ -81,4 +81,8 @@ class StudentController(val studentService: StudentService) {
     @GetMapping("/update/{id}")
     fun updateStudent(@PathVariable id: Long) =
         studentService.updateStudent(id, Student(id, "Name ${UUID.randomUUID()}"))
+
+
+    @GetMapping("/all")
+    fun allCache(): MutableCollection<String> = cacheManager.cacheNames
 }
